@@ -1,0 +1,60 @@
+FROM composer:2.8 AS vendor
+WORKDIR /var/www/html
+
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --no-progress \
+    --optimize-autoloader
+
+FROM node:24-alpine AS frontend
+WORKDIR /var/www/html
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY resources ./resources
+COPY public ./public
+COPY vite.config.js ./
+RUN npm run build
+
+FROM php:8.5-cli-alpine AS app
+WORKDIR /var/www/html
+
+RUN apk add --no-cache \
+    bash \
+    icu-dev \
+    libzip-dev \
+    oniguruma-dev \
+    zlib-dev \
+    linux-headers \
+    $PHPIZE_DEPS \
+    && docker-php-ext-install -j"$(nproc)" \
+        bcmath \
+        intl \
+        mbstring \
+        pcntl \
+        pdo_mysql \
+        zip \
+    && pecl install redis swoole \
+    && docker-php-ext-enable redis swoole \
+    && apk del --no-network $PHPIZE_DEPS
+
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
+
+COPY . .
+COPY --from=vendor /var/www/html/vendor ./vendor
+COPY --from=frontend /var/www/html/public/build ./public/build
+
+RUN rm -rf node_modules tests docker/8.0 docker/8.1 docker/8.2 docker/8.3 docker/8.4 docker/8.5 \
+    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/testing storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R ug+rwx storage bootstrap/cache
+
+USER www-data
+
+EXPOSE 8000
+
+CMD ["sh", "-lc", "php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=${OCTANE_WORKERS:-auto} --task-workers=${OCTANE_TASK_WORKERS:-auto} --max-requests=1000"]

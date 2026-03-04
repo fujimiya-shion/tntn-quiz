@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+for SUPERVISOR_USER in "$SUPERVISOR_OCTANE_USER" "$SUPERVISOR_QUEUE_USER" "$SUPERVISOR_SCHEDULE_USER" "$SUPERVISOR_REVERB_USER"; do
+    if [ -n "$SUPERVISOR_USER" ] && [ "$SUPERVISOR_USER" != "root" ] && [ "$SUPERVISOR_USER" != "sail" ]; then
+        echo "Supervisor user must be either 'sail' or 'root'."
+        exit 1
+    fi
+done
+
+if [ ! -z "$WWWUSER" ]; then
+    usermod -u $WWWUSER sail
+fi
+
+if [ ! -d /.composer ]; then
+    mkdir /.composer
+fi
+
+chmod -R ugo+rw /.composer
+
+if [ $# -gt 0 ]; then
+    if [ "$SUPERVISOR_OCTANE_USER" = "root" ]; then
+        exec "$@"
+    else
+        exec gosu $WWWUSER "$@"
+    fi
+else
+    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+fi
