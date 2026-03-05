@@ -203,4 +203,10 @@ vendor/bin/pint --format agent
 
 ## 13. License
 
-MIT
+MIT License
+
+Copyright (c) 2026
+
+## 14. Author
+
+- LinkedIn: [Thắng Lợi Trần](https://www.linkedin.com/in/thắng-lợi-trần/)
