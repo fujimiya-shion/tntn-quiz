@@ -1,52 +1,65 @@
 services:
-  app:
+  tntn_quiz_octane:
     build:
       context: .
       dockerfile: docker/prod/Dockerfile
-    image: quiz-backend:prod
+    image: tntn_quiz_image:${GIT_TAG:-latest}
     env_file:
       - .env
+    command: ["sh", "-lc", "php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=${OCTANE_WORKERS:-auto} --task-workers=${OCTANE_TASK_WORKERS:-auto} --max-requests=${OCTANE_MAX_REQUESTS:-1000}"]
     ports:
-      - '${APP_PORT:-5000}:8000'
+      - '${APP_PORT:-8000}:8000'
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$s=@fsockopen(\"127.0.0.1\",8000); if (!$$s) { exit(1);} fclose($$s);'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
-      - app
+      - tntn_quiz_app
 
-  queue:
-    image: quiz-backend:prod
+  tntn_quiz_queue:
+    image: tntn_quiz_image:${GIT_TAG:-latest}
     env_file:
       - .env
     command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--max-time=3600"]
     depends_on:
-      - app
+      - tntn_quiz_octane
     restart: unless-stopped
     networks:
-      - app
+      - tntn_quiz_app
 
-  schedule:
-    image: quiz-backend:prod
+  tntn_quiz_schedule:
+    image: tntn_quiz_image:${GIT_TAG:-latest}
     env_file:
       - .env
     command: ["php", "artisan", "schedule:work"]
     depends_on:
-      - app
+      - tntn_quiz_octane
     restart: unless-stopped
     networks:
-      - app
+      - tntn_quiz_app
 
-  reverb:
-    image: quiz-backend:prod
+  tntn_quiz_reverb:
+    image: tntn_quiz_image:${GIT_TAG:-latest}
     env_file:
       - .env
-    command: ["sh", "-lc", "php artisan reverb:start --host=${REVERB_SERVER_HOST:-0.0.0.0} --port=${REVERB_SERVER_PORT:-8080}"]
+    command: ["sh", "-lc", "php artisan reverb:start --host=${REVERB_SERVER_HOST:-0.0.0.0} --port=${REVERB_SERVER_PORT:-8080} --debug=${REVERB_DEBUG:-false}"]
     ports:
       - '${REVERB_SERVER_PORT:-8080}:${REVERB_SERVER_PORT:-8080}'
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$p=getenv(\"REVERB_SERVER_PORT\")?:8080; $$s=@fsockopen(\"127.0.0.1\",(int)$$p); if (!$$s) { exit(1);} fclose($$s);'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     depends_on:
-      - app
+      - tntn_quiz_octane
     restart: unless-stopped
     networks:
-      - app
+      - tntn_quiz_app
 
 networks:
-  app:
+  tntn_quiz_app:
     driver: bridge

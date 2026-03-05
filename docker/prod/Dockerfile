@@ -20,7 +20,7 @@ COPY public ./public
 COPY vite.config.js ./
 RUN npm run build
 
-FROM php:8.5-cli-alpine AS app
+FROM php:8.4-cli-alpine AS app
 WORKDIR /var/www/html
 
 RUN apk add --no-cache \
@@ -28,6 +28,7 @@ RUN apk add --no-cache \
     icu-dev \
     libzip-dev \
     oniguruma-dev \
+    libstdc++ \
     zlib-dev \
     linux-headers \
     $PHPIZE_DEPS \
@@ -35,6 +36,7 @@ RUN apk add --no-cache \
         bcmath \
         intl \
         mbstring \
+        opcache \
         pcntl \
         pdo_mysql \
         zip \
@@ -55,6 +57,6 @@ RUN rm -rf node_modules tests docker/8.0 docker/8.1 docker/8.2 docker/8.3 docker
 
 USER www-data
 
-EXPOSE 8000
+EXPOSE ${APP_PORT:-8000} ${APP_PORT:-8000}
 
-CMD ["sh", "-lc", "php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=${OCTANE_WORKERS:-auto} --task-workers=${OCTANE_TASK_WORKERS:-auto} --max-requests=1000"]
+CMD ["sh", "-lc", "php artisan octane:start --server=swoole --host=0.0.0.0 --port=${APP_PORT:-8000} --workers=${OCTANE_WORKERS:-auto} --task-workers=${OCTANE_TASK_WORKERS:-auto} --max-requests=1000"]
