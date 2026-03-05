@@ -1,4 +1,4 @@
-# Quiz Backend (Laravel 12 + Realtime)
+# TNTN Quiz (Laravel 12 + Realtime)
 
 Backend + frontend SPA cho hệ thống quiz realtime theo mô hình **Host / Player**.
 
