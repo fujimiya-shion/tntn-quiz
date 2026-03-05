@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Sheet } from 'react-modal-sheet';
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { getStatusLabel } from '../statusLabels';
 
-const CHART_COLORS = ['#7c3aed', '#2563eb', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444'];
+const ResultCharts = lazy(() => import('./ResultCharts'));
+const ResultDetailSheet = lazy(() => import('./ResultDetailSheet'));
 
 export default function LiveRoomPanel({
     roomCode,
@@ -24,6 +24,19 @@ export default function LiveRoomPanel({
 
     const progressPercent = question && question.answer_seconds > 0
         ? Math.max(0, Math.min(100, (remainingSeconds / question.answer_seconds) * 100))
+        : 0;
+    const questionImageUrls = Array.isArray(question?.image_urls)
+        ? question.image_urls
+        : Array.isArray(question?.question_image_urls)
+            ? question.question_image_urls
+            : Array.isArray(question?.question_images)
+                ? question.question_images
+                : [];
+    const hasSingleImage = questionImageUrls.length === 1;
+    const questionOrder = Number(question?.question_order || 0);
+    const totalQuestions = Number(question?.total_questions || 0);
+    const quizProgressPercent = totalQuestions > 0
+        ? Math.max(0, Math.min(100, (questionOrder / totalQuestions) * 100))
         : 0;
 
     const totalAnswers = useMemo(() => {
@@ -58,6 +71,20 @@ export default function LiveRoomPanel({
                     <span>Room: {roomCode}</span>
                     <span>{role === 'host' ? 'Host' : 'Player'}</span>
                 </div>
+                {questionOrder > 0 && totalQuestions > 0 ? (
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs font-semibold text-amber-100">
+                            <span>Câu {questionOrder}/{totalQuestions}</span>
+                            <span>{Math.round(quizProgressPercent)}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/20">
+                            <div
+                                className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-700"
+                                style={{ width: `${quizProgressPercent}%` }}
+                            />
+                        </div>
+                    </div>
+                ) : null}
                 <div className="h-2 overflow-hidden rounded-full bg-white/20">
                     <div
                         className="h-full rounded-full bg-emerald-300 transition-all duration-1000"
@@ -65,7 +92,7 @@ export default function LiveRoomPanel({
                     />
                 </div>
                 <div className="flex items-center justify-between text-xs text-white/80">
-                    <span>{status}</span>
+                    <span>{getStatusLabel(status)}</span>
                     <span>{remainingSeconds}s</span>
                 </div>
             </div>
@@ -90,7 +117,25 @@ export default function LiveRoomPanel({
 
             {question ? (
                 <div className="mt-4 rounded-2xl border border-white/15 bg-white/95 p-4 text-indigo-900">
-                    <h3 className="text-center text-lg font-bold">{question.text}</h3>
+                    {question.text ? (
+                        <h3 className="text-center text-lg font-bold">{question.text}</h3>
+                    ) : (
+                        <h3 className="text-center text-lg font-bold">Câu hỏi bằng hình ảnh</h3>
+                    )}
+                    {questionImageUrls.length > 0 ? (
+                        <div className={`mt-4 grid gap-3 ${hasSingleImage ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                            {questionImageUrls.map((imageUrl, index) => (
+                                <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-xl border border-violet-200 bg-violet-50 p-2">
+                                    <img
+                                        src={imageUrl}
+                                        alt={`Question image ${index + 1}`}
+                                        className={`w-full rounded-lg object-contain ${hasSingleImage ? 'max-h-[420px]' : 'max-h-[300px]'}`}
+                                        loading="lazy"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
                     <div className="mt-4 grid gap-3">
                         {question.options?.map((option) => (
                             <button
@@ -111,26 +156,6 @@ export default function LiveRoomPanel({
 
             {status === 'showing_result' ? (
                 <div className="mt-4 rounded-2xl border border-white/15 bg-white/95 p-4 text-indigo-900">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                        <h3 className="text-lg font-bold">Thống Kê Tổng Quan</h3>
-                        <div className="flex items-center gap-2 rounded-lg bg-indigo-50 p-1">
-                            <button
-                                type="button"
-                                onClick={() => setChartType('pie')}
-                                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${chartType === 'pie' ? 'bg-indigo-600 text-white' : 'text-indigo-700 hover:bg-indigo-100'}`}
-                            >
-                                Pie
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setChartType('column')}
-                                className={`rounded-md px-3 py-1 text-xs font-semibold transition ${chartType === 'column' ? 'bg-indigo-600 text-white' : 'text-indigo-700 hover:bg-indigo-100'}`}
-                            >
-                                Column
-                            </button>
-                        </div>
-                    </div>
-
                     <div className="grid grid-cols-3 gap-2">
                         <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
                             <div className="text-[11px] uppercase tracking-wide text-violet-600">Tổng trả lời</div>
@@ -146,41 +171,13 @@ export default function LiveRoomPanel({
                         </div>
                     </div>
 
-                    <div className="mt-4 h-64 rounded-xl border border-indigo-100 bg-white p-2">
-                        <ResponsiveContainer width="100%" height="100%">
-                            {chartType === 'pie' ? (
-                                <PieChart>
-                                    <Pie
-                                        data={chartData}
-                                        dataKey="totalCount"
-                                        nameKey="name"
-                                        cx="50%"
-                                        cy="48%"
-                                        outerRadius={95}
-                                        label={({ ratioPercent }) => `${Math.round(ratioPercent)}%`}
-                                    >
-                                        {chartData.map((entry, index) => (
-                                            <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip formatter={(value) => [`${value}`, 'Lượt chọn']} />
-                                    <Legend />
-                                </PieChart>
-                            ) : (
-                                <BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis hide dataKey="name" />
-                                    <YAxis allowDecimals={false} />
-                                    <Tooltip formatter={(value, name) => [name === 'totalCount' ? `${value}` : `${Number(value).toFixed(1)}%`, name === 'totalCount' ? 'Lượt chọn' : 'Tỉ lệ']} />
-                                    <Bar dataKey="totalCount" name="Lượt chọn" radius={[8, 8, 0, 0]}>
-                                        {chartData.map((entry, index) => (
-                                            <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            )}
-                        </ResponsiveContainer>
-                    </div>
+                    <Suspense fallback={<div className="mt-4 rounded-xl border border-indigo-100 bg-white p-4 text-sm font-semibold text-indigo-700">Đang tải biểu đồ...</div>}>
+                        <ResultCharts
+                            chartType={chartType}
+                            setChartType={setChartType}
+                            chartData={chartData}
+                        />
+                    </Suspense>
 
                     <div className="mt-3 space-y-2">
                         {results.map((row) => {
@@ -205,38 +202,13 @@ export default function LiveRoomPanel({
                 </div>
             ) : null}
 
-            <Sheet isOpen={isDetailSheetOpen} onClose={() => setIsDetailSheetOpen(false)} snapPoints={[0.85, 0.5]}>
-                <Sheet.Container>
-                    <Sheet.Header />
-                    <Sheet.Content>
-                        <div className="h-full overflow-y-auto px-4 pb-6">
-                            <h4 className="text-base font-bold text-slate-900">Danh sách người trả lời</h4>
-                            <p className="mt-1 text-sm text-slate-500">Vuốt xuống để đóng.</p>
-
-                            <div className="mt-4 space-y-2">
-                                {resultDetails.length === 0 ? (
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                                        Chưa có dữ liệu trả lời cho câu này.
-                                    </div>
-                                ) : (
-                                    resultDetails.map((row, index) => (
-                                        <div key={`${row.room_player_id}-${row.option_id}-${index}`} className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-3">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="font-semibold text-indigo-900">{row.display_name}</div>
-                                                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.gender === 'male' ? 'bg-sky-100 text-sky-700' : 'bg-fuchsia-100 text-fuchsia-700'}`}>
-                                                    {row.gender === 'male' ? 'Nam' : 'Nữ'}
-                                                </span>
-                                            </div>
-                                            <div className="mt-1 text-sm text-indigo-700">Đáp án: {row.option_text}</div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </Sheet.Content>
-                </Sheet.Container>
-                <Sheet.Backdrop onTap={() => setIsDetailSheetOpen(false)} />
-            </Sheet>
+            <Suspense fallback={null}>
+                <ResultDetailSheet
+                    isOpen={isDetailSheetOpen}
+                    onClose={() => setIsDetailSheetOpen(false)}
+                    resultDetails={resultDetails}
+                />
+            </Suspense>
         </div>
     );
 }

@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class QuizRoomController extends Controller
 {
@@ -36,22 +37,30 @@ class QuizRoomController extends Controller
         }
 
         $accessToken = Str::random(64);
-        Cache::put($this->hostAccessTokenKey($accessToken), $user->id, now()->addHours(8));
+        $ttlMinutes = (int) config('quiz.host_auth.ttl_minutes', 480);
+        Cache::put($this->hostAccessTokenKey($accessToken), $user->id, now()->addMinutes($ttlMinutes));
+
+        $cookie = Cookie::create(
+            name: (string) config('quiz.host_auth.cookie_name', 'quiz_host_access_token'),
+            value: $accessToken,
+            expire: now()->addMinutes($ttlMinutes),
+            path: '/',
+            domain: null,
+            secure: request()->isSecure(),
+            httpOnly: true,
+            raw: false,
+            sameSite: 'lax',
+        );
 
         return response()->json([
-            'host_access_token' => $accessToken,
             'host_name' => $user->name,
             'email' => $user->email,
-        ]);
+        ])->cookie($cookie);
     }
 
     public function quizzes(Request $request): JsonResponse
     {
-        $hostAccessToken = $request->bearerToken()
-            ?? $request->header('X-Host-Token')
-            ?? $request->string('host_access_token')->value();
-
-        $hostUserId = $this->resolveHostUserId($hostAccessToken);
+        $hostUserId = $this->resolveHostUserId($this->resolveHostAccessToken($request));
 
         if ($hostUserId === null) {
             return response()->json([
@@ -70,9 +79,113 @@ class QuizRoomController extends Controller
         ]);
     }
 
+    public function rooms(Request $request): JsonResponse
+    {
+        $hostUserId = $this->resolveHostUserId($this->resolveHostAccessToken($request));
+
+        if ($hostUserId === null) {
+            return response()->json([
+                'message' => 'Invalid host access token.',
+            ], 401);
+        }
+
+        $rooms = QuizRoom::query()
+            ->with('quiz:id,title')
+            ->withCount([
+                'players as players_count' => fn ($query) => $query->where('is_host', false),
+            ])
+            ->orderByDesc('id')
+            ->paginate(15)
+            ->withQueryString();
+
+        $transformedRooms = $rooms->getCollection()
+            ->map(function (QuizRoom $room): array {
+                return [
+                    'room_code' => $room->room_code,
+                    'status' => $room->status,
+                    'quiz_id' => $room->quiz_id,
+                    'quiz_title' => $room->quiz?->title,
+                    'players_count' => (int) ($room->players_count ?? 0),
+                    'current_question_id' => $room->current_question_id,
+                    'created_at' => optional($room->created_at)->toISOString(),
+                    'updated_at' => optional($room->updated_at)->toISOString(),
+                ];
+            })
+            ->values();
+
+        $rooms->setCollection($transformedRooms);
+
+        return response()->json([
+            'rooms' => $rooms->items(),
+            'pagination' => [
+                'current_page' => $rooms->currentPage(),
+                'last_page' => $rooms->lastPage(),
+                'per_page' => $rooms->perPage(),
+                'total' => $rooms->total(),
+            ],
+        ]);
+    }
+
+    public function roomDetail(Request $request, string $roomCode): JsonResponse
+    {
+        $hostUserId = $this->resolveHostUserId($this->resolveHostAccessToken($request));
+
+        if ($hostUserId === null) {
+            return response()->json([
+                'message' => 'Invalid host access token.',
+            ], 401);
+        }
+
+        $user = User::query()->find($hostUserId);
+
+        if ($user === null) {
+            return response()->json([
+                'message' => 'Host account not found.',
+            ], 401);
+        }
+
+        $room = QuizRoom::query()
+            ->with('quiz:id,title')
+            ->where('room_code', $roomCode)
+            ->first();
+
+        if ($room === null) {
+            return response()->json([
+                'message' => 'Room not found.',
+            ], 404);
+        }
+
+        $hostPlayer = RoomPlayer::query()
+            ->where('quiz_room_id', $room->id)
+            ->where('is_host', true)
+            ->orderBy('id')
+            ->first();
+
+        if ($hostPlayer === null) {
+            $hostPlayer = RoomPlayer::query()->create([
+                'quiz_room_id' => $room->id,
+                'player_token' => (string) Str::uuid(),
+                'display_name' => $user->name ?: $user->email,
+                'gender' => 'male',
+                'is_host' => true,
+                'joined_at' => now(),
+                'last_seen_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'room_code' => $room->room_code,
+            'status' => $room->status,
+            'quiz_id' => $room->quiz_id,
+            'quiz_title' => $room->quiz?->title,
+            'host_token' => $hostPlayer->player_token,
+            'join_url' => url('/room/join/'.$room->room_code),
+        ]);
+    }
+
     public function createForHost(HostCreateRoomRequest $request): JsonResponse
     {
-        $hostUserId = $this->resolveHostUserId($request->string('host_access_token')->value());
+        $hostUserId = $this->resolveHostUserId($this->resolveHostAccessToken($request));
 
         if ($hostUserId === null) {
             return response()->json([
@@ -95,13 +208,12 @@ class QuizRoomController extends Controller
         ]);
 
         $hostName = $request->string('host_name')->value();
-        $hostGender = $request->string('host_gender')->value();
 
         $host = RoomPlayer::query()->create([
             'quiz_room_id' => $room->id,
             'player_token' => (string) Str::uuid(),
             'display_name' => $hostName !== '' ? $hostName : ($user->name ?: $user->email),
-            'gender' => in_array($hostGender, ['male', 'female'], true) ? $hostGender : 'male',
+            'gender' => 'male',
             'is_host' => true,
             'joined_at' => now(),
             'last_seen_at' => now(),
@@ -135,12 +247,36 @@ class QuizRoomController extends Controller
             ], 422);
         }
 
+        $requestedDisplayName = trim($request->string('display_name')->value());
+
+        if ($requestedDisplayName !== '') {
+            $isDuplicatedName = RoomPlayer::query()
+                ->where('quiz_room_id', $room->id)
+                ->whereRaw('LOWER(display_name) = ?', [mb_strtolower($requestedDisplayName)])
+                ->exists();
+
+            if ($isDuplicatedName) {
+                return response()->json([
+                    'message' => 'Tên người chơi đã tồn tại trong phòng. Vui lòng chọn tên khác.',
+                ], 409);
+            }
+        }
+
+        $displayName = $requestedDisplayName;
+
+        if ($displayName === '') {
+            do {
+                $displayName = 'Anonymous-'.Str::upper(Str::random(4));
+            } while (RoomPlayer::query()
+                ->where('quiz_room_id', $room->id)
+                ->where('display_name', $displayName)
+                ->exists());
+        }
+
         $player = RoomPlayer::query()->create([
             'quiz_room_id' => $room->id,
             'player_token' => (string) Str::uuid(),
-            'display_name' => $request->string('display_name')->value() !== ''
-                ? $request->string('display_name')->value()
-                : 'Anonymous-'.Str::upper(Str::random(4)),
+            'display_name' => $displayName,
             'gender' => $request->string('gender')->value(),
             'is_host' => false,
             'joined_at' => now(),
@@ -274,10 +410,14 @@ class QuizRoomController extends Controller
         $options = $nextQuestion->options()
             ->orderBy('option_order')
             ->get(['id', 'option_text', 'option_order']);
+        $totalQuestions = QuizQuestion::query()
+            ->where('quiz_id', $room->quiz_id)
+            ->count();
 
         event(new QuizRoomUpdated($room->room_code, 'question_opened', [
             'question_id' => $nextQuestion->id,
             'question_text' => $nextQuestion->question_text,
+            'question_image_urls' => $nextQuestion->questionImageUrls(),
             'answer_seconds' => $nextQuestion->answer_seconds,
             'ends_at' => $endsAt->toISOString(),
         ]));
@@ -289,6 +429,9 @@ class QuizRoomController extends Controller
             'question' => [
                 'id' => $nextQuestion->id,
                 'text' => $nextQuestion->question_text,
+                'image_urls' => $nextQuestion->questionImageUrls(),
+                'question_order' => $nextQuestion->question_order,
+                'total_questions' => $totalQuestions,
                 'answer_seconds' => $nextQuestion->answer_seconds,
                 'ends_at' => $endsAt->toISOString(),
                 'options' => $options,
@@ -328,6 +471,46 @@ class QuizRoomController extends Controller
         ]);
     }
 
+    public function dissolve(HostFinishQuizRequest $request, string $roomCode): JsonResponse
+    {
+        $room = QuizRoom::query()->where('room_code', $roomCode)->first();
+
+        if ($room === null) {
+            return response()->json([
+                'message' => 'Room not found.',
+            ], 404);
+        }
+
+        $host = $this->resolveHostPlayer($room, $request->string('host_token')->value());
+
+        if ($host === null) {
+            return response()->json([
+                'message' => 'Invalid host token.',
+            ], 403);
+        }
+
+        if ($room->status === 'finished') {
+            return response()->json([
+                'message' => 'Room already finished.',
+            ], 422);
+        }
+
+        $room->update([
+            'status' => 'finished',
+            'current_question_id' => null,
+            'current_question_started_at' => null,
+            'current_question_ends_at' => null,
+        ]);
+
+        event(new QuizRoomUpdated($room->room_code, 'room_dissolved', []));
+
+        return response()->json([
+            'room_code' => $room->room_code,
+            'status' => 'finished',
+            'message' => 'Room dissolved.',
+        ]);
+    }
+
     private function generateRoomCode(): string
     {
         do {
@@ -340,6 +523,16 @@ class QuizRoomController extends Controller
     private function hostAccessTokenKey(string $accessToken): string
     {
         return 'quiz_host_access:'.$accessToken;
+    }
+
+    private function resolveHostAccessToken(Request $request): string
+    {
+        $cookieName = (string) config('quiz.host_auth.cookie_name', 'quiz_host_access_token');
+
+        return (string) ($request->bearerToken()
+            ?? $request->header('X-Host-Token')
+            ?? $request->cookie($cookieName)
+            ?? $request->string('host_access_token')->value());
     }
 
     private function resolveHostUserId(?string $accessToken): ?int

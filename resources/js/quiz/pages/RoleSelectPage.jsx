@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { PiCrownSimpleFill, PiUsersThreeFill } from 'react-icons/pi';
 
 export default function RoleSelectPage() {
@@ -13,8 +14,8 @@ export default function RoleSelectPage() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <a
-                        href="/host"
+                    <Link
+                        to="/host"
                         className="group rounded-3xl border border-indigo-200/70 bg-white/85 p-6 shadow-[0_24px_80px_-34px_rgba(79,70,229,0.55)] backdrop-blur transition hover:-translate-y-1 hover:border-indigo-300 hover:shadow-[0_32px_90px_-35px_rgba(79,70,229,0.65)]"
                     >
                         <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg">
@@ -25,10 +26,10 @@ export default function RoleSelectPage() {
                         <div className="mt-5 inline-flex rounded-xl bg-indigo-100 px-3 py-2 text-sm font-semibold text-indigo-700 transition group-hover:bg-indigo-200">
                             Vào /host
                         </div>
-                    </a>
+                    </Link>
 
-                    <a
-                        href="/room/join"
+                    <Link
+                        to="/room/join"
                         className="group rounded-3xl border border-fuchsia-200/70 bg-white/85 p-6 shadow-[0_24px_80px_-34px_rgba(168,85,247,0.45)] backdrop-blur transition hover:-translate-y-1 hover:border-fuchsia-300 hover:shadow-[0_32px_90px_-35px_rgba(168,85,247,0.6)]"
                     >
                         <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-lg">
@@ -39,7 +40,7 @@ export default function RoleSelectPage() {
                         <div className="mt-5 inline-flex rounded-xl bg-fuchsia-100 px-3 py-2 text-sm font-semibold text-fuchsia-700 transition group-hover:bg-fuchsia-200">
                             Vào /room/join/{'{ROOM_CODE}'}
                         </div>
-                    </a>
+                    </Link>
                 </div>
             </div>
         </div>

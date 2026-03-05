@@ -17,4 +17,35 @@ export default defineConfig({
             ignored: ['**/storage/framework/views/**'],
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (!id.includes('node_modules')) {
+                        return;
+                    }
+
+                    if (id.includes('recharts')) {
+                        return 'charts';
+                    }
+
+                    if (id.includes('laravel-echo') || id.includes('pusher-js')) {
+                        return 'realtime';
+                    }
+
+                    if (id.includes('react-modal-sheet')) {
+                        return 'sheet';
+                    }
+
+                    if (id.includes('react-router-dom')) {
+                        return 'router';
+                    }
+
+                    if (id.includes('/react/') || id.includes('react-dom')) {
+                        return 'react-vendor';
+                    }
+                },
+            },
+        },
+    },
 });

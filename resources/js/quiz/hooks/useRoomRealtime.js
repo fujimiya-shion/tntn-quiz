@@ -1,5 +1,4 @@
 import axios from 'axios';
-import Echo from 'laravel-echo';
 import { useRef } from 'react';
 
 const LOCALHOST_ALIASES = new Set(['localhost', '127.0.0.1', '::1']);
@@ -14,7 +13,7 @@ export function useRoomRealtime() {
         }
     };
 
-    const start = ({
+    const start = async ({
         roomCode,
         playerToken,
         onRoomUpdated,
@@ -39,6 +38,10 @@ export function useRoomRealtime() {
             onFallback();
             return;
         }
+
+        const { default: Pusher } = await import('pusher-js');
+        window.Pusher = Pusher;
+        const { default: Echo } = await import('laravel-echo');
 
         const echo = new Echo({
             broadcaster: 'reverb',

@@ -99,6 +99,9 @@ class QuizPlayController extends Controller
 
         $question = null;
         $remainingSeconds = 0;
+        $totalQuestions = QuizQuestion::query()
+            ->where('quiz_id', $room->quiz_id)
+            ->count();
 
         if ($room->current_question_id !== null) {
             $questionModel = QuizQuestion::query()->where('id', $room->current_question_id)->first();
@@ -107,6 +110,9 @@ class QuizPlayController extends Controller
                 $question = [
                     'id' => $questionModel->id,
                     'text' => $questionModel->question_text,
+                    'image_urls' => $questionModel->questionImageUrls(),
+                    'question_order' => $questionModel->question_order,
+                    'total_questions' => $totalQuestions,
                     'answer_seconds' => $questionModel->answer_seconds,
                     'options' => $questionModel->options()
                         ->orderBy('option_order')
@@ -251,6 +257,7 @@ class QuizPlayController extends Controller
             'room_code' => $room->room_code,
             'question_id' => $question->id,
             'question_text' => $question->question_text,
+            'question_image_urls' => $question->questionImageUrls(),
             'options' => $options,
             'overview' => $overview,
             'answer_details' => $answerDetails,

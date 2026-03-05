@@ -16,6 +16,13 @@ Route::get('/host', function () {
     ]);
 });
 
+Route::get('/host/{roomCode}', function (string $roomCode) {
+    return view('welcome', [
+        'page' => 'host',
+        'roomCode' => strtoupper($roomCode),
+    ]);
+});
+
 Route::get('/player/{roomCode}', function (string $roomCode) {
     return view('welcome', [
         'page' => 'player',

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { PiGenderFemaleBold, PiGenderMaleBold } from 'react-icons/pi';
+import { useNavigate } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
 import LiveRoomPanel from '../components/LiveRoomPanel';
 import { api, getErrorMessage } from '../api';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 
 export default function PlayerPage({ initialRoomCode }) {
+    const navigate = useNavigate();
     const [roomCode, setRoomCode] = useState(initialRoomCode);
     const [displayName, setDisplayName] = useState('');
     const [gender, setGender] = useState('');
@@ -21,6 +23,8 @@ export default function PlayerPage({ initialRoomCode }) {
 
     const [errorMessage, setErrorMessage] = useState('');
     const [infoMessage, setInfoMessage] = useState('');
+    const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+    const [leaveMode, setLeaveMode] = useState('back');
 
     const realtime = useRoomRealtime();
 
@@ -34,9 +38,54 @@ export default function PlayerPage({ initialRoomCode }) {
         return Math.max(0, Math.ceil(seconds));
     };
 
+    const normalizeQuestion = (rawQuestion) => {
+        if (!rawQuestion) {
+            return null;
+        }
+
+        const rawImages = rawQuestion.image_urls ?? rawQuestion.question_image_urls ?? rawQuestion.question_images ?? [];
+        const imageUrls = Array.isArray(rawImages)
+            ? rawImages
+                .filter((value) => typeof value === 'string' && value !== '')
+                .map((value) => (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) ? value : `/storage/${value}`)
+            : [];
+
+        return {
+            ...rawQuestion,
+            image_urls: imageUrls,
+        };
+    };
+
     const clearMessages = () => {
         setErrorMessage('');
         setInfoMessage('');
+    };
+
+    const resetPlayerSession = (nextRoomCode) => {
+        setRoomCode(nextRoomCode);
+        setPlayerToken('');
+        setStatus('waiting');
+        setQuestion(null);
+        setRemainingSeconds(0);
+        setHasAnswered(false);
+        setResults([]);
+        setResultOverview(null);
+        setResultDetails([]);
+        setInfoMessage('');
+        setIsLeaveModalOpen(false);
+    };
+
+    const onConfirmLeave = () => {
+        setIsLeaveModalOpen(false);
+
+        if (leaveMode === 'reload') {
+            window.location.reload();
+            return;
+        }
+
+        realtime.stop();
+        resetPlayerSession(roomCode);
+        navigate('/room/join', { replace: true });
     };
 
     const syncResults = async (code, questionId) => {
@@ -49,7 +98,7 @@ export default function PlayerPage({ initialRoomCode }) {
     const syncState = async (code, token) => {
         const response = await api.get(`/quiz/rooms/${code}/state`, { params: { player_token: token } });
         setStatus(response.data.status);
-        setQuestion(response.data.question);
+        setQuestion(normalizeQuestion(response.data.question));
         setRemainingSeconds(normalizeSeconds(response.data.remaining_seconds));
         setHasAnswered(Boolean(response.data.has_answered));
 
@@ -87,12 +136,11 @@ export default function PlayerPage({ initialRoomCode }) {
                 roomCode: response.data.room_code,
                 playerToken: response.data.player_token,
                 onRoomUpdated: async (eventData) => {
-                    if (eventData.type === 'quiz_finished') {
+                    if (eventData.type === 'quiz_finished' || eventData.type === 'room_dissolved') {
                         realtime.stop();
-                        toast.success('Quiz đã kết thúc.');
-                        window.setTimeout(() => {
-                            window.location.href = `/room/join/${response.data.room_code}`;
-                        }, 350);
+                        toast.success(eventData.type === 'room_dissolved' ? 'Phòng đã giải tán.' : 'Quiz đã kết thúc.');
+                        resetPlayerSession(response.data.room_code);
+                        navigate(`/room/join/${response.data.room_code}`, { replace: true });
                         return;
                     }
 
@@ -138,6 +186,48 @@ export default function PlayerPage({ initialRoomCode }) {
     }, [status, remainingSeconds]);
 
     useEffect(() => () => realtime.stop(), []);
+
+    useEffect(() => {
+        if (!playerToken) {
+            return;
+        }
+
+        window.history.pushState({ player_guard: true }, '', window.location.href);
+
+        const onBeforeUnload = (event) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        const onPopState = () => {
+            window.history.pushState({ player_guard: true }, '', window.location.href);
+            setLeaveMode('back');
+            setIsLeaveModalOpen(true);
+        };
+
+        const onKeyDown = (event) => {
+            const isReloadKey = event.key === 'F5'
+                || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r');
+
+            if (!isReloadKey) {
+                return;
+            }
+
+            event.preventDefault();
+            setLeaveMode('reload');
+            setIsLeaveModalOpen(true);
+        };
+
+        window.addEventListener('beforeunload', onBeforeUnload);
+        window.addEventListener('popstate', onPopState);
+        window.addEventListener('keydown', onKeyDown);
+
+        return () => {
+            window.removeEventListener('beforeunload', onBeforeUnload);
+            window.removeEventListener('popstate', onPopState);
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [playerToken]);
 
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_20%_20%,#67e8f9_0,#bfdbfe_35%,#c4b5fd_100%)] text-slate-800">
@@ -211,6 +301,34 @@ export default function PlayerPage({ initialRoomCode }) {
                     )}
                 </div>
             </div>
+            {isLeaveModalOpen ? (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-[2px]">
+                    <div className="w-full max-w-md rounded-2xl border border-white/20 bg-white p-5 shadow-[0_40px_120px_-28px_rgba(15,23,42,0.9)]">
+                        <h3 className="text-lg font-black text-indigo-900">Bạn muốn rời phòng?</h3>
+                        <p className="mt-2 text-sm text-slate-600">
+                            {leaveMode === 'reload'
+                                ? 'Bạn có chắc chắn muốn tải lại trang không?'
+                                : 'Bạn có chắc chắn muốn quay lại và rời phòng hiện tại không?'}
+                        </p>
+                        <div className="mt-4 flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                onClick={() => setIsLeaveModalOpen(false)}
+                            >
+                                Ở lại
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
+                                onClick={onConfirmLeave}
+                            >
+                                Rời phòng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }
