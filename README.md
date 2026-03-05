@@ -1,59 +1,206 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Quiz Backend (Laravel 12 + Realtime)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend + frontend SPA cho hệ thống quiz realtime theo mô hình **Host / Player**.
 
-## About Laravel
+- Host tạo phòng, mở câu hỏi, xem kết quả realtime, kết thúc/giải tán phòng.
+- Player vào phòng, trả lời câu hỏi, nhận cập nhật realtime qua WebSocket.
+- Hỗ trợ câu hỏi có **text + nhiều ảnh**.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 1. Tech Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- PHP 8.4, Laravel 12
+- Laravel Reverb (WebSocket)
+- Laravel Octane (tùy chọn)
+- MySQL + Redis
+- Filament v5 (admin)
+- React 19 + Vite + Tailwind v4
+- Pest 4 (test)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 2. Tính năng chính
 
-## Learning Laravel
+- Đăng nhập host bằng cookie token (`/api/quiz/host/login`)
+- Tạo room, join room theo `room_code`
+- Realtime room updates qua channel presence `quiz-room.{roomCode}`
+- Countdown câu hỏi + đóng câu hỏi tự động theo thời gian
+- Thống kê đáp án theo giới tính và tổng số
+- Host có QR full-screen để player quét vào link join room
+- Chặn player rời phòng đột ngột (back/reload có modal xác nhận)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## 3. Cài đặt nhanh (Local, không Docker)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Yêu cầu
 
-## Laravel Sponsors
+- PHP >= 8.2 (khuyến nghị 8.4)
+- Composer
+- Node.js + npm
+- MySQL
+- Redis
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Các bước
 
-### Premium Partners
+```bash
+cp .env.example .env
+composer install
+npm install
+php artisan key:generate
+php artisan migrate
+php artisan db:seed
+php artisan storage:link
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Chạy ứng dụng:
 
-## Contributing
+```bash
+composer run dev
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Lệnh này chạy đồng thời:
+- Laravel server
+- Queue listener
+- Log tail (`pail`)
+- Vite dev server
 
-## Code of Conduct
+## 4. Chạy bằng Docker Compose (Sail style)
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+cp .env.example .env
+docker compose up -d --build
+docker compose exec quiz_app php artisan key:generate
+docker compose exec quiz_app php artisan migrate
+docker compose exec quiz_app php artisan db:seed
+docker compose exec quiz_app php artisan storage:link
+```
 
-## Security Vulnerabilities
+Các port chính (theo `.env`):
+- App: `${APP_PORT}` (mặc định 80)
+- Vite: `${VITE_PORT}` (mặc định 5173)
+- Reverb: `${REVERB_SERVER_PORT}` (mặc định 8080)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## 5. Biến môi trường quan trọng
 
-## License
+### Database
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
+
+### Reverb / WebSocket
+
+- `BROADCAST_CONNECTION=reverb`
+- `REVERB_SERVER_HOST`, `REVERB_SERVER_PORT`
+- `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`
+- `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`
+- `VITE_REVERB_APP_KEY`, `VITE_REVERB_HOST`, `VITE_REVERB_PORT`, `VITE_REVERB_SCHEME`
+
+### Host account seed
+
+- `QUIZ_HOST_NAME`
+- `QUIZ_HOST_EMAIL`
+- `QUIZ_HOST_PASSWORD`
+
+Ghi chú:
+- Môi trường `local`: seeder host mặc định password `123456`.
+- Môi trường `production`: bắt buộc set `QUIZ_HOST_PASSWORD`.
+
+## 6. Tài khoản và dữ liệu mẫu
+
+Seeder mặc định trong `DatabaseSeeder`:
+- `HostAccountSeeder`
+- `SampleQuizSeeder`
+
+Đăng nhập host mẫu:
+- Email: theo `QUIZ_HOST_EMAIL` (mặc định `host@quiz.local`)
+- Password local: `123456`
+
+## 7. Routes quan trọng
+
+### Web routes
+
+- `/` trang chọn vai trò
+- `/host` host console
+- `/host/{roomCode}` host room detail
+- `/room/join` player join
+- `/room/join/{roomCode}` player join trực tiếp theo mã phòng
+- `/admin` Filament admin panel
+
+### API routes (prefix `/api/quiz`)
+
+Host:
+- `POST /host/login`
+- `GET /host/quizzes`
+- `GET /host/rooms`
+- `GET /host/rooms/{roomCode}`
+- `POST /host/rooms`
+
+Room / Play:
+- `POST /rooms/{roomCode}/join`
+- `GET /rooms/{roomCode}/players`
+- `POST /rooms/{roomCode}/host/next`
+- `POST /rooms/{roomCode}/host/finish`
+- `POST /rooms/{roomCode}/host/dissolve`
+- `POST /rooms/{roomCode}/answers`
+- `GET /rooms/{roomCode}/state`
+- `GET /rooms/{roomCode}/results`
+
+## 8. Câu hỏi có ảnh
+
+Model `QuizQuestion` hỗ trợ:
+- `question_text` (nullable)
+- `question_images` (array/json)
+
+Ảnh được upload public disk (`storage/app/public`) và expose qua `storage:link`.
+
+Nếu UI không hiển thị ảnh:
+1. `php artisan storage:link`
+2. kiểm tra `APP_URL`
+3. build lại frontend (`npm run dev` hoặc `npm run build`)
+
+## 9. Realtime troubleshooting
+
+Nếu WebSocket không connect:
+1. kiểm tra biến `REVERB_*` và `VITE_REVERB_*`
+2. đảm bảo service Reverb đang chạy (`php artisan reverb:start` hoặc container `reverb`)
+3. mở port Reverb tương ứng
+4. kiểm tra mixed content (HTTP/HTTPS lệch scheme)
+
+## 10. Build frontend
+
+Dev:
+
+```bash
+npm run dev
+```
+
+Production:
+
+```bash
+npm run build
+```
+
+Ghi chú: cảnh báo `Some chunks are larger than 500 kB` là warning tối ưu hiệu năng, không phải lỗi build.
+
+## 11. Test & Code Style
+
+Run test:
+
+```bash
+php artisan test --compact
+```
+
+Format PHP:
+
+```bash
+vendor/bin/pint --format agent
+```
+
+## 12. Cấu trúc thư mục chính
+
+- `app/Http/Controllers/Api` API cho host/player
+- `app/Events` broadcast events
+- `app/Jobs` job đóng câu hỏi
+- `app/Filament` resources quản trị quiz
+- `resources/js/quiz` React SPA (host/player)
+- `database/migrations` schema
+- `database/seeders` dữ liệu seed
+
+## 13. License
+
+MIT
