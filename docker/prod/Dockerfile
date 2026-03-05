@@ -1,9 +1,13 @@
 FROM composer:2.8 AS vendor
 WORKDIR /var/www/html
 
+RUN apk add --no-cache icu-dev \
+    && docker-php-ext-install -j"$(nproc)" intl
+
 COPY composer.json composer.lock ./
 RUN composer install \
     --no-dev \
+    --no-scripts \
     --no-interaction \
     --prefer-dist \
     --no-progress \
@@ -25,6 +29,7 @@ WORKDIR /var/www/html
 
 RUN apk add --no-cache \
     bash \
+    brotli-dev \
     icu-dev \
     libzip-dev \
     oniguruma-dev \
@@ -49,6 +54,10 @@ COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 COPY . .
 COPY --from=vendor /var/www/html/vendor ./vendor
 COPY --from=frontend /var/www/html/public/build ./public/build
+
+RUN rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php bootstrap/cache/events.php bootstrap/cache/routes-v7.php \
+    && php artisan package:discover --ansi \
+    && php artisan config:clear --ansi
 
 RUN rm -rf node_modules tests docker/8.0 docker/8.1 docker/8.2 docker/8.3 docker/8.4 docker/8.5 \
     && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/testing storage/framework/views storage/logs bootstrap/cache \

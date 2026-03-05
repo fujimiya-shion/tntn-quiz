@@ -13,6 +13,7 @@ storage/framework/sessions/*
 storage/framework/testing/*
 storage/framework/views/*
 coverage
+bootstrap/cache/*.php
 docker/8.0
 docker/8.1
 docker/8.2
