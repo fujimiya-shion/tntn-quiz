@@ -9,6 +9,9 @@ services:
     command: ["sh", "-lc", "php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=${OCTANE_WORKERS:-auto} --task-workers=${OCTANE_TASK_WORKERS:-auto} --max-requests=${OCTANE_MAX_REQUESTS:-1000}"]
     ports:
       - '${APP_PORT:-8000}:8000'
+    volumes:
+      - tntn_quiz_storage:/var/www/html/storage
+      - tntn_quiz_bootstrap_cache:/var/www/html/bootstrap/cache
     healthcheck:
       test: ["CMD-SHELL", "php -r '$$s=@fsockopen(\"127.0.0.1\",8000); if (!$$s) { exit(1);} fclose($$s);'"]
       interval: 10s
@@ -24,6 +27,9 @@ services:
     env_file:
       - .env
     command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--max-time=3600"]
+    volumes:
+      - tntn_quiz_storage:/var/www/html/storage
+      - tntn_quiz_bootstrap_cache:/var/www/html/bootstrap/cache
     depends_on:
       - tntn_quiz_octane
     restart: unless-stopped
@@ -35,6 +41,9 @@ services:
     env_file:
       - .env
     command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - tntn_quiz_storage:/var/www/html/storage
+      - tntn_quiz_bootstrap_cache:/var/www/html/bootstrap/cache
     depends_on:
       - tntn_quiz_octane
     restart: unless-stopped
@@ -48,6 +57,9 @@ services:
     command: ["sh", "-lc", "php artisan reverb:start --host=${REVERB_SERVER_HOST:-0.0.0.0} --port=${REVERB_SERVER_PORT:-8080} --debug=${REVERB_DEBUG:-false}"]
     ports:
       - '${REVERB_SERVER_PORT:-8080}:${REVERB_SERVER_PORT:-8080}'
+    volumes:
+      - tntn_quiz_storage:/var/www/html/storage
+      - tntn_quiz_bootstrap_cache:/var/www/html/bootstrap/cache
     healthcheck:
       test: ["CMD-SHELL", "php -r '$$p=getenv(\"REVERB_SERVER_PORT\")?:8080; $$s=@fsockopen(\"127.0.0.1\",(int)$$p); if (!$$s) { exit(1);} fclose($$s);'"]
       interval: 10s
@@ -63,3 +75,7 @@ services:
 networks:
   tntn_quiz_app:
     driver: bridge
+
+volumes:
+  tntn_quiz_storage:
+  tntn_quiz_bootstrap_cache:
