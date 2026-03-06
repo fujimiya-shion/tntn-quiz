@@ -180,6 +180,7 @@ class QuizPlayController extends Controller
         }
 
         $questionId = (int) ($request->integer('question_id') ?: (int) $room->current_question_id);
+        $selectedOptionId = null;
 
         if ($questionId === 0) {
             return response()->json([
@@ -198,6 +199,23 @@ class QuizPlayController extends Controller
             ], 404);
         }
 
+        $playerToken = $request->query('player_token');
+
+        if (is_string($playerToken) && $playerToken !== '') {
+            $playerId = RoomPlayer::query()
+                ->where('quiz_room_id', $room->id)
+                ->where('player_token', $playerToken)
+                ->value('id');
+
+            if ($playerId !== null) {
+                $selectedOptionId = RoomAnswer::query()
+                    ->where('quiz_room_id', $room->id)
+                    ->where('quiz_question_id', $question->id)
+                    ->where('room_player_id', $playerId)
+                    ->value('quiz_option_id');
+            }
+        }
+
         $stats = RoomAnswer::query()
             ->selectRaw('room_answers.quiz_option_id, SUM(CASE WHEN room_players.gender = "male" THEN 1 ELSE 0 END) AS male_count, SUM(CASE WHEN room_players.gender = "female" THEN 1 ELSE 0 END) AS female_count, COUNT(*) AS total_count')
             ->join('room_players', 'room_players.id', '=', 'room_answers.room_player_id')
@@ -210,12 +228,15 @@ class QuizPlayController extends Controller
         $options = $question->options()
             ->orderBy('option_order')
             ->get()
-            ->map(function (QuizOption $option) use ($stats): array {
+            ->map(function (QuizOption $option) use ($stats, $question): array {
                 $row = $stats->get($option->id);
+                $hasCorrectOption = (bool) $question->has_correct_option;
 
                 return [
                     'option_id' => $option->id,
+                    'option_order' => $option->option_order,
                     'option_text' => $option->option_text,
+                    'is_correct' => $hasCorrectOption ? (bool) $option->is_correct : false,
                     'male_count' => (int) ($row->male_count ?? 0),
                     'female_count' => (int) ($row->female_count ?? 0),
                     'total_count' => (int) ($row->total_count ?? 0),
@@ -242,12 +263,15 @@ class QuizPlayController extends Controller
                     'gender' => $row->gender,
                     'option_id' => (int) $row->quiz_option_id,
                     'option_text' => $option['option_text'] ?? 'N/A',
+                    'is_correct' => (bool) ($option['is_correct'] ?? false),
                     'answered_at' => $row->answered_at !== null ? Carbon::parse($row->answered_at)->toISOString() : null,
                 ];
             })
             ->values();
 
         $overview = [
+            'has_correct_option' => (bool) $question->has_correct_option,
+            'selected_option_id' => $selectedOptionId !== null ? (int) $selectedOptionId : null,
             'total_answers' => $answerDetails->count(),
             'male_answers' => $answerDetails->where('gender', 'male')->count(),
             'female_answers' => $answerDetails->where('gender', 'female')->count(),

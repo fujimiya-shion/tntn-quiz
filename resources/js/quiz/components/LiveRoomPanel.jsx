@@ -63,6 +63,11 @@ export default function LiveRoomPanel({
 
     const maleRatio = totalAnswers > 0 ? Math.round((maleAnswers / totalAnswers) * 100) : 0;
     const femaleRatio = totalAnswers > 0 ? Math.round((femaleAnswers / totalAnswers) * 100) : 0;
+    const hasCorrectOption = Boolean(resultOverview?.has_correct_option);
+    const selectedOptionId = Number(resultOverview?.selected_option_id || 0);
+    const selectedOptionIsCorrect = hasCorrectOption
+        && selectedOptionId > 0
+        && results.some((row) => Number(row.option_id) === selectedOptionId && row.is_correct);
 
     return (
         <div className="mt-6 rounded-[2rem] bg-gradient-to-b from-indigo-900 to-violet-700 p-4 text-white shadow-[0_24px_80px_-28px_rgba(59,7,100,0.7)]">
@@ -136,7 +141,7 @@ export default function LiveRoomPanel({
                             ))}
                         </div>
                     ) : null}
-                    <div className="mt-4 grid gap-3">
+                    <div className={`mt-4 grid gap-3 ${question.options && question.options.length >= 4 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                         {question.options?.map((option) => (
                             <button
                                 key={option.id}
@@ -179,26 +184,66 @@ export default function LiveRoomPanel({
                         />
                     </Suspense>
 
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {results.map((row) => {
                             const rowRatio = totalAnswers > 0 ? Math.round((Number(row.total_count || 0) / totalAnswers) * 100) : 0;
+                            const isCorrectRow = hasCorrectOption && row.is_correct;
+                            const isWrongSelectedRow = role === 'player'
+                                && hasCorrectOption
+                                && !selectedOptionIsCorrect
+                                && selectedOptionId > 0
+                                && Number(row.option_id) === selectedOptionId;
+                            const rowClassName = isCorrectRow
+                                ? 'border-emerald-300 bg-emerald-50'
+                                : isWrongSelectedRow
+                                    ? 'border-rose-300 bg-rose-50'
+                                    : 'border-violet-200 bg-violet-50';
+                            const titleClassName = isCorrectRow
+                                ? 'text-emerald-900'
+                                : isWrongSelectedRow
+                                    ? 'text-rose-900'
+                                    : 'text-violet-900';
+                            const statClassName = isCorrectRow
+                                ? 'text-emerald-700'
+                                : isWrongSelectedRow
+                                    ? 'text-rose-700'
+                                    : 'text-violet-700';
 
                             return (
-                                <div key={row.option_id} className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
-                                    <div className="font-semibold text-violet-900">{row.option_text}</div>
-                                    <div className="text-sm text-violet-700">Nam: {row.male_count} | Nữ: {row.female_count} | Tổng: {row.total_count} | Ratio: {rowRatio}%</div>
+                                <div
+                                    key={row.option_id}
+                                    className={`rounded-xl border px-3 py-2 ${rowClassName}`}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className={`font-semibold ${titleClassName}`}>{row.option_text}</div>
+                                        <div className="flex items-center gap-1.5">
+                                            {isCorrectRow ? (
+                                                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                    Đúng
+                                                </span>
+                                            ) : null}
+                                            {isWrongSelectedRow ? (
+                                                <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                    Bạn chọn
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                    <div className={`text-sm ${statClassName}`}>Nam: {row.male_count} | Nữ: {row.female_count} | Tổng: {row.total_count} | Ratio: {rowRatio}%</div>
                                 </div>
                             );
                         })}
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setIsDetailSheetOpen(true)}
-                        className="mt-4 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_26px_-12px_rgba(79,70,229,0.8)] transition hover:from-indigo-500 hover:to-violet-500"
-                    >
-                        Xem chi tiết ai đã trả lời
-                    </button>
+                    {role === 'host' ? (
+                        <button
+                            type="button"
+                            onClick={() => setIsDetailSheetOpen(true)}
+                            className="mt-4 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_26px_-12px_rgba(79,70,229,0.8)] transition hover:from-indigo-500 hover:to-violet-500"
+                        >
+                            Xem chi tiết ai đã trả lời
+                        </button>
+                    ) : null}
                 </div>
             ) : null}
 

@@ -7,6 +7,7 @@ import { api, getErrorMessage } from '../api';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 
 export default function PlayerPage({ initialRoomCode }) {
+    const appName = (import.meta.env.VITE_APP_NAME || '').trim() || 'TNTN Quiz';
     const navigate = useNavigate();
     const [roomCode, setRoomCode] = useState(initialRoomCode);
     const [displayName, setDisplayName] = useState('');
@@ -88,8 +89,14 @@ export default function PlayerPage({ initialRoomCode }) {
         navigate('/room/join', { replace: true });
     };
 
-    const syncResults = async (code, questionId) => {
-        const response = await api.get(`/quiz/rooms/${code}/results`, { params: { question_id: questionId } });
+    const syncResults = async (code, questionId, token = null) => {
+        const params = { question_id: questionId };
+
+        if (token) {
+            params.player_token = token;
+        }
+
+        const response = await api.get(`/quiz/rooms/${code}/results`, { params });
         setResults(response.data.options ?? []);
         setResultOverview(response.data.overview ?? null);
         setResultDetails(response.data.answer_details ?? []);
@@ -103,7 +110,7 @@ export default function PlayerPage({ initialRoomCode }) {
         setHasAnswered(Boolean(response.data.has_answered));
 
         if (response.data.status === 'showing_result' && response.data.current_question_id) {
-            await syncResults(code, response.data.current_question_id);
+            await syncResults(code, response.data.current_question_id, token);
             return;
         }
 
@@ -145,7 +152,7 @@ export default function PlayerPage({ initialRoomCode }) {
                     }
 
                     if (eventData.type === 'question_closed' && eventData.payload?.question_id) {
-                        await syncResults(response.data.room_code, eventData.payload.question_id);
+                        await syncResults(response.data.room_code, eventData.payload.question_id, response.data.player_token);
                     }
 
                     await syncState(response.data.room_code, response.data.player_token);
@@ -234,7 +241,7 @@ export default function PlayerPage({ initialRoomCode }) {
             <Toaster position="top-right" richColors closeButton duration={3000} />
             <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-4 py-8">
                 <div className={`w-full ${playerToken ? 'max-w-3xl' : 'max-w-sm'}`}>
-                    <h1 className="mb-3 text-center text-3xl font-black tracking-tight text-indigo-900">Quiz Realtime</h1>
+                    <h1 className="mb-3 text-center text-3xl font-black tracking-tight text-indigo-900">{appName}</h1>
 
                     {errorMessage ? <div className="mb-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-rose-700">{errorMessage}</div> : null}
                     {infoMessage ? <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-700">{infoMessage}</div> : null}
