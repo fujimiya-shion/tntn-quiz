@@ -62,6 +62,7 @@ RUN apk add --no-cache \
 COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 
 COPY . .
+COPY docker/prod/php.ini /usr/local/etc/php/conf.d/zz-custom.ini
 COPY --from=vendor /var/www/html/vendor ./vendor
 COPY --from=frontend /var/www/html/public/build ./public/build
 
