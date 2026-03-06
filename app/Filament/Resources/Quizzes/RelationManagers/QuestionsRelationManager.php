@@ -43,14 +43,12 @@ class QuestionsRelationManager extends RelationManager
                     ->reorderable()
                     ->openable()
                     ->downloadable()
-                    ->required()
-                    ->minFiles(1)
                     ->columnSpanFull(),
                 TextInput::make('question_order')
                     ->label('Thứ tự câu')
                     ->required()
                     ->numeric()
-                    ->default(1)
+                    ->default(fn (): int => ((int) ($this->ownerRecord->questions()->max('question_order') ?? 0)) + 1)
                     ->minValue(1)
                     ->unique(
                         table: 'quiz_questions',

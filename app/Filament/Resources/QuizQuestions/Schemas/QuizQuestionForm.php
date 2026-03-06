@@ -35,8 +35,6 @@ class QuizQuestionForm
                     ->reorderable()
                     ->openable()
                     ->downloadable()
-                    ->required()
-                    ->minFiles(1)
                     ->columnSpanFull(),
                 TextInput::make('question_order')
                     ->required()
