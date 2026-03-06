@@ -1,14 +1,11 @@
 services:
   tntn_quiz_octane:
-    build:
-      context: .
-      dockerfile: docker/prod/Dockerfile
     image: fujimiyashion/tntn-quiz:${GIT_TAG:-latest}
     env_file:
       - .env
     command: ["sh", "-lc", "php artisan octane:start --server=swoole --host=0.0.0.0 --port=8000 --workers=${OCTANE_WORKERS:-auto} --task-workers=${OCTANE_TASK_WORKERS:-auto} --max-requests=${OCTANE_MAX_REQUESTS:-1000}"]
     ports:
-      - '${APP_PORT:-8000}:8000'
+      - '${APP_PORT:-7000}:8000'
     volumes:
       - tntn_quiz_storage:/var/www/html/storage
       - tntn_quiz_bootstrap_cache:/var/www/html/bootstrap/cache
@@ -54,14 +51,14 @@ services:
     image: fujimiyashion/tntn-quiz:${GIT_TAG:-latest}
     env_file:
       - .env
-    command: ["sh", "-lc", "php artisan reverb:start --host=${REVERB_SERVER_HOST:-0.0.0.0} --port=${REVERB_SERVER_PORT:-8080} --debug=${REVERB_DEBUG:-false}"]
+    command: ["sh", "-lc", "php artisan reverb:start --host=${REVERB_SERVER_HOST:-0.0.0.0} --port=${REVERB_SERVER_PORT:-7070}"]
     ports:
-      - '${REVERB_SERVER_PORT:-8080}:${REVERB_SERVER_PORT:-8080}'
+      - '${REVERB_SERVER_PORT:-7070}:${REVERB_SERVER_PORT:-7070}'
     volumes:
       - tntn_quiz_storage:/var/www/html/storage
       - tntn_quiz_bootstrap_cache:/var/www/html/bootstrap/cache
     healthcheck:
-      test: ["CMD-SHELL", "php -r '$$p=getenv(\"REVERB_SERVER_PORT\")?:8080; $$s=@fsockopen(\"127.0.0.1\",(int)$$p); if (!$$s) { exit(1);} fclose($$s);'"]
+      test: ["CMD-SHELL", "php -r '$$p=getenv(\"REVERB_SERVER_PORT\")?:7070; $$s=@fsockopen(\"127.0.0.1\",(int)$$p); if (!$$s) { exit(1);} fclose($$s);'"]
       interval: 10s
       timeout: 3s
       retries: 5
