@@ -142,19 +142,71 @@ export default function LiveRoomPanel({
                         </div>
                     ) : null}
                     <div className={`mt-4 grid gap-3 ${question.options && question.options.length >= 4 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-                        {question.options?.map((option) => (
-                            <button
-                                key={option.id}
-                                className="rounded-xl border border-violet-300 bg-violet-100 px-4 py-3 text-left font-semibold text-violet-900 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-45"
-                                onClick={() => onAnswer(option.id)}
-                                disabled={role === 'host' || hasAnswered || status !== 'question_open'}
-                            >
-                                <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-violet-700 text-xs font-bold text-white">
-                                    {option.option_order}
-                                </span>
-                                {option.option_text}
-                            </button>
-                        ))}
+                        {question.options?.map((option) => {
+                            const isResultPhase = status === 'showing_result';
+                            const isDisabled = role === 'host' || hasAnswered || status !== 'question_open';
+                            const shouldShowDisabledStyle = isDisabled && !isResultPhase;
+                            const matchedResultRow = results.find((row) => {
+                                const sameOptionId = Number(row.option_id) > 0 && Number(row.option_id) === Number(option.id);
+                                const sameOptionOrder = Number(row.option_order) > 0 && Number(row.option_order) === Number(option.option_order);
+
+                                return sameOptionId || sameOptionOrder;
+                            });
+                            const isCorrectOption = isResultPhase && hasCorrectOption && Boolean(matchedResultRow?.is_correct);
+                            const isWrongSelectedOption = isResultPhase
+                                && role === 'player'
+                                && hasCorrectOption
+                                && !selectedOptionIsCorrect
+                                && selectedOptionId > 0
+                                && (
+                                    Number(option.id) === selectedOptionId
+                                    || Number(matchedResultRow?.option_id) === selectedOptionId
+                                );
+
+                            const optionClassName = isCorrectOption
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                                : isWrongSelectedOption
+                                    ? 'border-rose-300 bg-rose-50 text-rose-900'
+                                    : shouldShowDisabledStyle
+                                        ? 'border-violet-200 bg-violet-50 text-violet-500'
+                                        : 'border-violet-300 bg-violet-100 text-violet-900 hover:bg-violet-200';
+
+                            const optionOrderClassName = isCorrectOption
+                                ? 'bg-emerald-600'
+                                : isWrongSelectedOption
+                                    ? 'bg-rose-600'
+                                    : shouldShowDisabledStyle
+                                        ? 'bg-violet-400'
+                                        : 'bg-violet-700';
+
+                            return (
+                                <button
+                                    key={option.id}
+                                    className={`rounded-xl border px-4 py-3 text-left font-semibold transition ${isDisabled ? 'cursor-not-allowed' : ''} ${shouldShowDisabledStyle ? 'opacity-70' : ''} ${optionClassName}`}
+                                    onClick={() => onAnswer(option.id)}
+                                    disabled={isDisabled}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div>
+                                            <span className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white ${optionOrderClassName}`}>
+                                                {option.option_order}
+                                            </span>
+                                            {option.option_text}
+                                        </div>
+                                        {isCorrectOption ? (
+                                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                Đúng
+                                            </span>
+                                        ) : null}
+                                        {isWrongSelectedOption ? (
+                                            <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                Bạn chọn
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             ) : null}
