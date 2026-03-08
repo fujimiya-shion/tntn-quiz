@@ -416,6 +416,7 @@ class QuizRoomController extends Controller
 
         event(new QuizRoomUpdated($room->room_code, 'question_opened', [
             'question_id' => $nextQuestion->id,
+            'quiz_question_type' => (int) $nextQuestion->quiz_question_type->value,
             'question_text' => $nextQuestion->question_text,
             'question_image_urls' => $nextQuestion->questionImageUrls(),
             'answer_seconds' => $nextQuestion->answer_seconds,
@@ -429,12 +430,13 @@ class QuizRoomController extends Controller
             'question' => [
                 'id' => $nextQuestion->id,
                 'text' => $nextQuestion->question_text,
+                'quiz_question_type' => (int) $nextQuestion->quiz_question_type->value,
                 'image_urls' => $nextQuestion->questionImageUrls(),
                 'question_order' => $nextQuestion->question_order,
                 'total_questions' => $totalQuestions,
                 'answer_seconds' => $nextQuestion->answer_seconds,
                 'ends_at' => $endsAt->toISOString(),
-                'options' => $options,
+                'options' => $nextQuestion->isMultipleChoice() ? $options : [],
             ],
         ]);
     }

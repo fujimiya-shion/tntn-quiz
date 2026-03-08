@@ -15,6 +15,9 @@ class RoomAnswer extends Model
         'room_player_id',
         'quiz_question_id',
         'quiz_option_id',
+        'answer_text',
+        'normalized_answer_text',
+        'is_correct',
         'is_late',
         'answered_at',
     ];
@@ -23,6 +26,7 @@ class RoomAnswer extends Model
     {
         return [
             'is_late' => 'boolean',
+            'is_correct' => 'boolean',
             'answered_at' => 'datetime',
         ];
     }

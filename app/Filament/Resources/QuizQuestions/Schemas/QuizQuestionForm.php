@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\QuizQuestions\Schemas;
 
+use App\QuizQuestionType;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -25,6 +26,13 @@ class QuizQuestionForm
                     ->rows(3)
                     ->maxLength(1000)
                     ->columnSpanFull(),
+                Select::make('quiz_question_type')
+                    ->label('Loại câu hỏi')
+                    ->options(QuizQuestionType::options())
+                    ->default(QuizQuestionType::MultipleChoice->value)
+                    ->native(false)
+                    ->live()
+                    ->required(),
                 FileUpload::make('question_images')
                     ->label('Ảnh câu hỏi')
                     ->image()
@@ -48,7 +56,15 @@ class QuizQuestionForm
                     ->maxValue(300)
                     ->default(10),
                 Toggle::make('has_correct_option')
-                    ->default(false),
+                    ->default(false)
+                    ->visible(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::MultipleChoice->value)
+                    ->dehydrated(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::MultipleChoice->value),
+                TextInput::make('fill_blank_answer')
+                    ->label('Đáp án điền khuyết')
+                    ->maxLength(255)
+                    ->required(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::FillInTheBlank->value)
+                    ->visible(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::FillInTheBlank->value)
+                    ->dehydrated(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::FillInTheBlank->value),
             ]);
     }
 }

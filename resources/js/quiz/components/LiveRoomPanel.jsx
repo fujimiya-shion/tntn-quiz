@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { getStatusLabel } from '../statusLabels';
 
 const ResultCharts = lazy(() => import('./ResultCharts'));
@@ -21,6 +21,13 @@ export default function LiveRoomPanel({
 }) {
     const [chartType, setChartType] = useState('pie');
     const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+    const [fillBlankAnswer, setFillBlankAnswer] = useState('');
+
+    const isFillInTheBlank = Number(question?.quiz_question_type || 1) === 2;
+
+    useEffect(() => {
+        setFillBlankAnswer('');
+    }, [question?.id]);
 
     const progressPercent = question && question.answer_seconds > 0
         ? Math.max(0, Math.min(100, (remainingSeconds / question.answer_seconds) * 100))
@@ -65,9 +72,23 @@ export default function LiveRoomPanel({
     const femaleRatio = totalAnswers > 0 ? Math.round((femaleAnswers / totalAnswers) * 100) : 0;
     const hasCorrectOption = Boolean(resultOverview?.has_correct_option);
     const selectedOptionId = Number(resultOverview?.selected_option_id || 0);
+    const selectedNormalizedAnswerText = (resultOverview?.selected_normalized_answer_text || '').toString();
+    const selectedAnswerIsCorrect = resultOverview?.selected_answer_is_correct === true;
+    const selectedAnswerText = (resultOverview?.selected_answer_text || '').toString();
     const selectedOptionIsCorrect = hasCorrectOption
         && selectedOptionId > 0
         && results.some((row) => Number(row.option_id) === selectedOptionId && row.is_correct);
+    const fillInputValue = status === 'showing_result' && selectedAnswerText !== ''
+        ? selectedAnswerText
+        : fillBlankAnswer;
+    const fillInputClassName = status === 'showing_result' && role === 'player' && hasAnswered
+        ? selectedAnswerIsCorrect
+            ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+            : 'border-rose-300 bg-rose-50 text-rose-900'
+        : 'border-violet-200 bg-white text-violet-900';
+    const fillInputDisabledClassName = status === 'showing_result'
+        ? ''
+        : 'disabled:bg-violet-100';
 
     return (
         <div className="mt-6 rounded-[2rem] bg-gradient-to-b from-indigo-900 to-violet-700 p-4 text-white shadow-[0_24px_80px_-28px_rgba(59,7,100,0.7)]">
@@ -141,73 +162,106 @@ export default function LiveRoomPanel({
                             ))}
                         </div>
                     ) : null}
-                    <div className={`mt-4 grid gap-3 ${question.options && question.options.length >= 4 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-                        {question.options?.map((option) => {
-                            const isResultPhase = status === 'showing_result';
-                            const isDisabled = role === 'host' || hasAnswered || status !== 'question_open';
-                            const shouldShowDisabledStyle = isDisabled && !isResultPhase;
-                            const matchedResultRow = results.find((row) => {
-                                const sameOptionId = Number(row.option_id) > 0 && Number(row.option_id) === Number(option.id);
-                                const sameOptionOrder = Number(row.option_order) > 0 && Number(row.option_order) === Number(option.option_order);
 
-                                return sameOptionId || sameOptionOrder;
-                            });
-                            const isCorrectOption = isResultPhase && hasCorrectOption && Boolean(matchedResultRow?.is_correct);
-                            const isWrongSelectedOption = isResultPhase
-                                && role === 'player'
-                                && hasCorrectOption
-                                && !selectedOptionIsCorrect
-                                && selectedOptionId > 0
-                                && (
-                                    Number(option.id) === selectedOptionId
-                                    || Number(matchedResultRow?.option_id) === selectedOptionId
-                                );
+                    {!isFillInTheBlank ? (
+                        <div className={`mt-4 grid gap-3 ${question.options && question.options.length >= 4 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                            {question.options?.map((option) => {
+                                const isResultPhase = status === 'showing_result';
+                                const isDisabled = role === 'host' || hasAnswered || status !== 'question_open';
+                                const shouldShowDisabledStyle = isDisabled && !isResultPhase;
+                                const matchedResultRow = results.find((row) => {
+                                    const sameOptionId = Number(row.option_id) > 0 && Number(row.option_id) === Number(option.id);
+                                    const sameOptionOrder = Number(row.option_order) > 0 && Number(row.option_order) === Number(option.option_order);
 
-                            const optionClassName = isCorrectOption
-                                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                                : isWrongSelectedOption
-                                    ? 'border-rose-300 bg-rose-50 text-rose-900'
-                                    : shouldShowDisabledStyle
-                                        ? 'border-violet-200 bg-violet-50 text-violet-500'
-                                        : 'border-violet-300 bg-violet-100 text-violet-900 hover:bg-violet-200';
+                                    return sameOptionId || sameOptionOrder;
+                                });
+                                const isCorrectOption = isResultPhase && hasCorrectOption && Boolean(matchedResultRow?.is_correct);
+                                const isWrongSelectedOption = isResultPhase
+                                    && role === 'player'
+                                    && hasCorrectOption
+                                    && !selectedOptionIsCorrect
+                                    && selectedOptionId > 0
+                                    && (
+                                        Number(option.id) === selectedOptionId
+                                        || Number(matchedResultRow?.option_id) === selectedOptionId
+                                    );
 
-                            const optionOrderClassName = isCorrectOption
-                                ? 'bg-emerald-600'
-                                : isWrongSelectedOption
-                                    ? 'bg-rose-600'
-                                    : shouldShowDisabledStyle
-                                        ? 'bg-violet-400'
-                                        : 'bg-violet-700';
+                                const optionClassName = isCorrectOption
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                                    : isWrongSelectedOption
+                                        ? 'border-rose-300 bg-rose-50 text-rose-900'
+                                        : shouldShowDisabledStyle
+                                            ? 'border-violet-200 bg-violet-50 text-violet-500'
+                                            : 'border-violet-300 bg-violet-100 text-violet-900 hover:bg-violet-200';
 
-                            return (
-                                <button
-                                    key={option.id}
-                                    className={`rounded-xl border px-4 py-3 text-left font-semibold transition ${isDisabled ? 'cursor-not-allowed' : ''} ${shouldShowDisabledStyle ? 'opacity-70' : ''} ${optionClassName}`}
-                                    onClick={() => onAnswer(option.id)}
-                                    disabled={isDisabled}
-                                >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div>
-                                            <span className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white ${optionOrderClassName}`}>
-                                                {option.option_order}
-                                            </span>
-                                            {option.option_text}
+                                const optionOrderClassName = isCorrectOption
+                                    ? 'bg-emerald-600'
+                                    : isWrongSelectedOption
+                                        ? 'bg-rose-600'
+                                        : shouldShowDisabledStyle
+                                            ? 'bg-violet-400'
+                                            : 'bg-violet-700';
+
+                                return (
+                                    <button
+                                        key={option.id}
+                                        className={`rounded-xl border px-4 py-3 text-left font-semibold transition ${isDisabled ? 'cursor-not-allowed' : ''} ${shouldShowDisabledStyle ? 'opacity-70' : ''} ${optionClassName}`}
+                                        onClick={() => onAnswer({ quiz_option_id: option.id })}
+                                        disabled={isDisabled}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div>
+                                                <span className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white ${optionOrderClassName}`}>
+                                                    {option.option_order}
+                                                </span>
+                                                {option.option_text}
+                                            </div>
+                                            {isCorrectOption ? (
+                                                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                    Đúng
+                                                </span>
+                                            ) : null}
+                                            {isWrongSelectedOption ? (
+                                                <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
+                                                    Bạn chọn
+                                                </span>
+                                            ) : null}
                                         </div>
-                                        {isCorrectOption ? (
-                                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-bold text-white">
-                                                Đúng
-                                            </span>
-                                        ) : null}
-                                        {isWrongSelectedOption ? (
-                                            <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
-                                                Bạn chọn
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                            {role === 'host' ? (
+                                <p className="text-sm font-semibold text-violet-700">Câu này là điền khuyết. Host không cần nhập, kết quả sẽ hiện sau khi hết giờ.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    <input
+                                        type="text"
+                                        value={fillInputValue}
+                                        onChange={(event) => setFillBlankAnswer(event.target.value)}
+                                        disabled={hasAnswered || status !== 'question_open'}
+                                        className={`w-full rounded-xl border px-3 py-2.5 text-sm transition focus:border-violet-400 focus:outline-none disabled:cursor-not-allowed ${fillInputClassName} ${fillInputDisabledClassName}`}
+                                        placeholder="Nhập đáp án điền khuyết"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => onAnswer({ answer_text: fillBlankAnswer.trim() })}
+                                        disabled={hasAnswered || status !== 'question_open' || fillBlankAnswer.trim() === ''}
+                                        className="w-full rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:bg-violet-300"
+                                    >
+                                        Gửi đáp án điền khuyết
+                                    </button>
+                                    {status === 'showing_result' && hasAnswered ? (
+                                        <p className={`text-sm font-semibold ${selectedAnswerIsCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                            {selectedAnswerIsCorrect ? 'Đáp án của bạn đúng.' : 'Đáp án của bạn sai.'}
+                                        </p>
+                                    ) : null}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             ) : null}
 
@@ -228,6 +282,12 @@ export default function LiveRoomPanel({
                         </div>
                     </div>
 
+                    {isFillInTheBlank && resultOverview?.correct_fill_blank_answer ? (
+                        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+                            Đáp án đúng: {resultOverview.correct_fill_blank_answer}
+                        </div>
+                    ) : null}
+
                     <Suspense fallback={<div className="mt-4 rounded-xl border border-indigo-100 bg-white p-4 text-sm font-semibold text-indigo-700">Đang tải biểu đồ...</div>}>
                         <ResultCharts
                             chartType={chartType}
@@ -240,11 +300,17 @@ export default function LiveRoomPanel({
                         {results.map((row) => {
                             const rowRatio = totalAnswers > 0 ? Math.round((Number(row.total_count || 0) / totalAnswers) * 100) : 0;
                             const isCorrectRow = hasCorrectOption && row.is_correct;
-                            const isWrongSelectedRow = role === 'player'
-                                && hasCorrectOption
-                                && !selectedOptionIsCorrect
-                                && selectedOptionId > 0
-                                && Number(row.option_id) === selectedOptionId;
+                            const isWrongSelectedRow = isFillInTheBlank
+                                ? role === 'player'
+                                    && hasCorrectOption
+                                    && !selectedAnswerIsCorrect
+                                    && selectedNormalizedAnswerText !== ''
+                                    && String(row.normalized_answer_text || '') === selectedNormalizedAnswerText
+                                : role === 'player'
+                                    && hasCorrectOption
+                                    && !selectedOptionIsCorrect
+                                    && selectedOptionId > 0
+                                    && Number(row.option_id) === selectedOptionId;
                             const rowClassName = isCorrectRow
                                 ? 'border-emerald-300 bg-emerald-50'
                                 : isWrongSelectedRow
@@ -263,7 +329,7 @@ export default function LiveRoomPanel({
 
                             return (
                                 <div
-                                    key={row.option_id}
+                                    key={row.result_id || row.option_id || row.normalized_answer_text || row.option_text}
                                     className={`rounded-xl border px-3 py-2 ${rowClassName}`}
                                 >
                                     <div className="flex items-center justify-between gap-2">

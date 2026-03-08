@@ -25,8 +25,7 @@ class QuizOverviewStats extends BaseWidget
         $totalAnswers = RoomAnswer::query()->count();
         $answersToday = RoomAnswer::query()->whereDate('answered_at', now()->toDateString())->count();
         $correctAnswers = RoomAnswer::query()
-            ->join('quiz_options', 'quiz_options.id', '=', 'room_answers.quiz_option_id')
-            ->where('quiz_options.is_correct', true)
+            ->where('is_correct', true)
             ->count();
 
         $correctRate = $totalAnswers > 0

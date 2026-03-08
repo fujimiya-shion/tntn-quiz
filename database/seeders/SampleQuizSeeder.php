@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Quiz;
 use App\Models\QuizOption;
 use App\Models\QuizQuestion;
+use App\QuizQuestionType;
 use Illuminate\Database\Seeder;
 
 class SampleQuizSeeder extends Seeder
@@ -23,8 +24,10 @@ class SampleQuizSeeder extends Seeder
             [
                 'question_order' => 1,
                 'question_text' => 'Bạn thích làm gì vào cuối tuần?',
+                'quiz_question_type' => QuizQuestionType::MultipleChoice->value,
                 'answer_seconds' => 15,
                 'has_correct_option' => false,
+                'fill_blank_answer' => null,
                 'options' => [
                     ['option_order' => 1, 'option_text' => 'Ở nhà nghỉ ngơi', 'is_correct' => false],
                     ['option_order' => 2, 'option_text' => 'Đi cafe với bạn', 'is_correct' => false],
@@ -35,8 +38,10 @@ class SampleQuizSeeder extends Seeder
             [
                 'question_order' => 2,
                 'question_text' => 'Thời điểm bạn tỉnh táo nhất trong ngày?',
+                'quiz_question_type' => QuizQuestionType::MultipleChoice->value,
                 'answer_seconds' => 12,
                 'has_correct_option' => false,
+                'fill_blank_answer' => null,
                 'options' => [
                     ['option_order' => 1, 'option_text' => 'Buổi sáng', 'is_correct' => false],
                     ['option_order' => 2, 'option_text' => 'Buổi trưa', 'is_correct' => false],
@@ -46,15 +51,12 @@ class SampleQuizSeeder extends Seeder
             ],
             [
                 'question_order' => 3,
-                'question_text' => '2 + 2 bằng bao nhiêu?',
+                'question_text' => 'Điền khuyết: Thành phố thủ đô của Việt Nam là?',
+                'quiz_question_type' => QuizQuestionType::FillInTheBlank->value,
                 'answer_seconds' => 10,
                 'has_correct_option' => true,
-                'options' => [
-                    ['option_order' => 1, 'option_text' => '3', 'is_correct' => false],
-                    ['option_order' => 2, 'option_text' => '4', 'is_correct' => true],
-                    ['option_order' => 3, 'option_text' => '5', 'is_correct' => false],
-                    ['option_order' => 4, 'option_text' => '6', 'is_correct' => false],
-                ],
+                'fill_blank_answer' => 'Hà Nội',
+                'options' => [],
             ],
         ];
 
@@ -68,8 +70,10 @@ class SampleQuizSeeder extends Seeder
                 ],
                 [
                     'question_text' => $questionPayload['question_text'],
+                    'quiz_question_type' => $questionPayload['quiz_question_type'],
                     'answer_seconds' => $questionPayload['answer_seconds'],
                     'has_correct_option' => $questionPayload['has_correct_option'],
+                    'fill_blank_answer' => $questionPayload['fill_blank_answer'],
                 ]
             );
 

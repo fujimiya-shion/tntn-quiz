@@ -164,19 +164,33 @@ export default function PlayerPage({ initialRoomCode }) {
         }
     };
 
-    const onAnswer = async (optionId) => {
+    const onAnswer = async (answerPayload) => {
         clearMessages();
+        setHasAnswered(true);
+        setInfoMessage('Đã gửi đáp án.');
+        toast.success('Đã gửi đáp án.');
 
         try {
             await api.post(`/quiz/rooms/${roomCode}/answers`, {
                 player_token: playerToken,
-                quiz_option_id: optionId,
+                ...answerPayload,
             });
-            setHasAnswered(true);
-            setInfoMessage('');
-            toast.success('Đã gửi đáp án.');
         } catch (error) {
-            setErrorMessage(getErrorMessage(error, 'Gửi đáp án thất bại.'));
+            const message = getErrorMessage(error, 'Gửi đáp án thất bại.');
+
+            if (error?.response?.status === 422 && message === 'Question is not open.') {
+                setErrorMessage('');
+                return;
+            }
+
+            if (error?.response?.status === 409) {
+                setErrorMessage('');
+                return;
+            }
+
+            setHasAnswered(false);
+            setInfoMessage('');
+            setErrorMessage(message);
         }
     };
 

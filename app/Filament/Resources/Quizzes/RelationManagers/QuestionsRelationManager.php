@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Quizzes\RelationManagers;
 
+use App\QuizQuestionType;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -9,6 +10,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -33,6 +35,13 @@ class QuestionsRelationManager extends RelationManager
                     ->rows(3)
                     ->maxLength(1000)
                     ->columnSpanFull(),
+                Select::make('quiz_question_type')
+                    ->label('Loại câu hỏi')
+                    ->options(QuizQuestionType::options())
+                    ->default(QuizQuestionType::MultipleChoice->value)
+                    ->native(false)
+                    ->live()
+                    ->required(),
                 FileUpload::make('question_images')
                     ->label('Ảnh câu hỏi')
                     ->image()
@@ -70,7 +79,15 @@ class QuestionsRelationManager extends RelationManager
                     ->maxValue(300),
                 Toggle::make('has_correct_option')
                     ->label('Có đáp án đúng')
-                    ->default(false),
+                    ->default(false)
+                    ->visible(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::MultipleChoice->value)
+                    ->dehydrated(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::MultipleChoice->value),
+                TextInput::make('fill_blank_answer')
+                    ->label('Đáp án điền khuyết')
+                    ->maxLength(255)
+                    ->required(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::FillInTheBlank->value)
+                    ->visible(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::FillInTheBlank->value)
+                    ->dehydrated(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::FillInTheBlank->value),
                 Repeater::make('options')
                     ->label('Đáp án')
                     ->relationship('options')
@@ -87,8 +104,9 @@ class QuestionsRelationManager extends RelationManager
                     ])
                     ->addActionLabel('Add to đáp án')
                     ->defaultItems(2)
-                    ->minItems(2)
                     ->reorderableWithButtons()
+                    ->visible(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::MultipleChoice->value)
+                    ->dehydrated(fn (callable $get): bool => (int) $get('quiz_question_type') === QuizQuestionType::MultipleChoice->value)
                     ->columnSpanFull(),
             ]);
     }
@@ -106,6 +124,17 @@ class QuestionsRelationManager extends RelationManager
                     ->placeholder('Câu hỏi bằng hình ảnh')
                     ->limit(80)
                     ->searchable(),
+                TextColumn::make('quiz_question_type')
+                    ->label('Loại')
+                    ->formatStateUsing(function (mixed $state): string {
+                        if ($state instanceof QuizQuestionType) {
+                            return $state->label();
+                        }
+
+                        $questionType = QuizQuestionType::tryFrom((int) $state);
+
+                        return $questionType?->label() ?? 'N/A';
+                    }),
                 TextColumn::make('question_images')
                     ->label('Ảnh')
                     ->formatStateUsing(function (mixed $state): int {
@@ -128,6 +157,7 @@ class QuestionsRelationManager extends RelationManager
                     ->sortable(),
                 IconColumn::make('has_correct_option')
                     ->label('Có đáp án đúng')
+                    ->state(fn ($record): bool => $record->isFillInTheBlank() ? true : (bool) $record->has_correct_option)
                     ->boolean(),
                 TextColumn::make('options_count')
                     ->label('Số đáp án')

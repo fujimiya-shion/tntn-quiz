@@ -15,7 +15,8 @@ class SubmitAnswerRequest extends FormRequest
     {
         return [
             'player_token' => ['required', 'uuid'],
-            'quiz_option_id' => ['required', 'integer'],
+            'quiz_option_id' => ['nullable', 'integer', 'required_without:answer_text'],
+            'answer_text' => ['nullable', 'string', 'max:255', 'required_without:quiz_option_id'],
         ];
     }
 
@@ -24,7 +25,8 @@ class SubmitAnswerRequest extends FormRequest
         return [
             'player_token.required' => 'player_token is required.',
             'player_token.uuid' => 'player_token must be a valid UUID.',
-            'quiz_option_id.required' => 'quiz_option_id is required.',
+            'quiz_option_id.required_without' => 'quiz_option_id is required when answer_text is empty.',
+            'answer_text.required_without' => 'answer_text is required when quiz_option_id is empty.',
         ];
     }
 }

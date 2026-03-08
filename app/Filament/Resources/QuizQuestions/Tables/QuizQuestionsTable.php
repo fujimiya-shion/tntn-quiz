@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\QuizQuestions\Tables;
 
+use App\QuizQuestionType;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -27,6 +28,17 @@ class QuizQuestionsTable
                     ->placeholder('Câu hỏi bằng hình ảnh')
                     ->limit(80)
                     ->searchable(),
+                TextColumn::make('quiz_question_type')
+                    ->label('Loại')
+                    ->formatStateUsing(function (mixed $state): string {
+                        if ($state instanceof QuizQuestionType) {
+                            return $state->label();
+                        }
+
+                        $questionType = QuizQuestionType::tryFrom((int) $state);
+
+                        return $questionType?->label() ?? 'N/A';
+                    }),
                 TextColumn::make('question_images')
                     ->label('Ảnh')
                     ->formatStateUsing(function (mixed $state): int {
@@ -50,6 +62,7 @@ class QuizQuestionsTable
                     ->sortable(),
                 IconColumn::make('has_correct_option')
                     ->label('Có đáp án đúng')
+                    ->state(fn ($record): bool => $record->isFillInTheBlank() ? true : (bool) $record->has_correct_option)
                     ->boolean(),
             ])
             ->filters([
