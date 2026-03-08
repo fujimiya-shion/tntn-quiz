@@ -12,6 +12,7 @@ Route::prefix('quiz')->group(function (): void {
     Route::post('/host/rooms', [QuizRoomController::class, 'createForHost']);
 
     Route::post('/rooms/{roomCode}/join', [QuizRoomController::class, 'join']);
+    Route::post('/rooms/{roomCode}/leave', [QuizRoomController::class, 'leave']);
     Route::get('/rooms/{roomCode}/players', [QuizRoomController::class, 'players']);
     Route::post('/rooms/{roomCode}/host/next', [QuizRoomController::class, 'next']);
     Route::post('/rooms/{roomCode}/host/finish', [QuizRoomController::class, 'finish']);

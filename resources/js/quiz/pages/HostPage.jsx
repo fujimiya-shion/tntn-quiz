@@ -38,6 +38,27 @@ export default function HostPage({ initialRoomCode = '' }) {
     const [players, setPlayers] = useState([]);
 
     const realtime = useRoomRealtime();
+    const getGenderMeta = (gender) => {
+        if (gender === 'female') {
+            return {
+                label: 'Nữ',
+                style: {
+                    border: '1px solid #f5b5e6',
+                    background: '#fdf2f8',
+                    color: '#a21caf',
+                },
+            };
+        }
+
+        return {
+            label: 'Nam',
+            style: {
+                border: '1px solid #bae6fd',
+                background: '#f0f9ff',
+                color: '#0369a1',
+            },
+        };
+    };
 
     const normalizeSeconds = (value) => {
         const seconds = Number(value);
@@ -100,6 +121,7 @@ export default function HostPage({ initialRoomCode = '' }) {
             onRoomUpdated: async (eventData) => {
                 if (eventData.type === 'player_joined' && eventData.payload?.player) {
                     const joinedPlayer = eventData.payload.player;
+                    const genderMeta = getGenderMeta(joinedPlayer.gender);
 
                     setPlayers((currentPlayers) => {
                         if (currentPlayers.some((player) => player.id === joinedPlayer.id)) {
@@ -109,7 +131,9 @@ export default function HostPage({ initialRoomCode = '' }) {
                         return [...currentPlayers, joinedPlayer];
                     });
 
-                    toast.info(`${joinedPlayer.display_name} (${joinedPlayer.gender}) vừa vào phòng.`);
+                    toast(`${joinedPlayer.display_name} (${genderMeta.label}) vừa vào phòng.`, {
+                        style: genderMeta.style,
+                    });
                 }
 
                 if (eventData.type === 'question_closed' && eventData.payload?.question_id) {

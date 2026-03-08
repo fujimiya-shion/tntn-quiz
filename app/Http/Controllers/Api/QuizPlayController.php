@@ -379,6 +379,9 @@ class QuizPlayController extends Controller
 
     private function fillInTheBlankResults(QuizRoom $room, QuizQuestion $question, ?RoomAnswer $selectedAnswer): JsonResponse
     {
+        $normalizedCorrectAnswer = $question->normalizedFillBlankAnswer();
+        $correctAnswerDisplay = (string) ($question->fill_blank_answer ?? '');
+
         $stats = RoomAnswer::query()
             ->selectRaw('room_answers.normalized_answer_text, MIN(room_answers.answer_text) AS answer_text, SUM(CASE WHEN room_players.gender = "male" THEN 1 ELSE 0 END) AS male_count, SUM(CASE WHEN room_players.gender = "female" THEN 1 ELSE 0 END) AS female_count, COUNT(*) AS total_count, MAX(CASE WHEN room_answers.is_correct = 1 THEN 1 ELSE 0 END) AS is_correct')
             ->join('room_players', 'room_players.id', '=', 'room_answers.room_player_id')
@@ -392,14 +395,22 @@ class QuizPlayController extends Controller
 
         $options = $stats
             ->values()
-            ->map(function ($row, int $index): array {
+            ->map(function ($row, int $index) use ($normalizedCorrectAnswer, $correctAnswerDisplay): array {
+                $normalizedAnswerText = (string) ($row->normalized_answer_text ?? '');
+                $isCorrect = (bool) ((int) ($row->is_correct ?? 0) === 1);
+                $displayAnswerText = (string) ($row->answer_text ?? $normalizedAnswerText ?? 'N/A');
+
+                if ($isCorrect && $normalizedCorrectAnswer !== '' && $normalizedAnswerText === $normalizedCorrectAnswer && $correctAnswerDisplay !== '') {
+                    $displayAnswerText = $correctAnswerDisplay;
+                }
+
                 return [
                     'result_id' => $index + 1,
                     'option_id' => null,
                     'option_order' => $index + 1,
-                    'option_text' => (string) ($row->answer_text ?? $row->normalized_answer_text ?? 'N/A'),
-                    'normalized_answer_text' => (string) ($row->normalized_answer_text ?? ''),
-                    'is_correct' => (bool) ((int) ($row->is_correct ?? 0) === 1),
+                    'option_text' => $displayAnswerText,
+                    'normalized_answer_text' => $normalizedAnswerText,
+                    'is_correct' => $isCorrect,
                     'male_count' => (int) ($row->male_count ?? 0),
                     'female_count' => (int) ($row->female_count ?? 0),
                     'total_count' => (int) ($row->total_count ?? 0),
@@ -434,8 +445,6 @@ class QuizPlayController extends Controller
                 ];
             })
             ->values();
-
-        $normalizedCorrectAnswer = $question->normalizedFillBlankAnswer();
 
         $overview = [
             'has_correct_option' => $normalizedCorrectAnswer !== '',

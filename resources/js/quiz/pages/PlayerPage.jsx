@@ -28,6 +28,7 @@ export default function PlayerPage({ initialRoomCode }) {
     const [leaveMode, setLeaveMode] = useState('back');
 
     const realtime = useRoomRealtime();
+    const leaveEndpoint = `/api/quiz/rooms/${roomCode}/leave`;
 
     const normalizeSeconds = (value) => {
         const seconds = Number(value);
@@ -76,16 +77,59 @@ export default function PlayerPage({ initialRoomCode }) {
         setIsLeaveModalOpen(false);
     };
 
-    const onConfirmLeave = () => {
+    const leaveRoom = async (code, token) => {
+        if (!code || !token) {
+            return;
+        }
+
+        try {
+            await api.post(`/quiz/rooms/${code}/leave`, {
+                player_token: token,
+            });
+        } catch (error) {
+            if (error?.response?.status === 404 || error?.response?.status === 403) {
+                return;
+            }
+
+            const fallbackResponse = await fetch(`/api/quiz/rooms/${code}/leave`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    player_token: token,
+                }),
+                keepalive: true,
+            });
+
+            if (!fallbackResponse.ok && fallbackResponse.status !== 404 && fallbackResponse.status !== 403) {
+                throw error;
+            }
+        }
+    };
+
+    const onConfirmLeave = async () => {
         setIsLeaveModalOpen(false);
+
+        const currentCode = roomCode;
+        const currentToken = playerToken;
+
+        realtime.stop();
+        try {
+            await leaveRoom(currentCode, currentToken);
+        } catch (error) {
+            setErrorMessage(getErrorMessage(error, 'Không thể rời phòng lúc này. Vui lòng thử lại.'));
+            return;
+        }
+
+        resetPlayerSession(currentCode);
 
         if (leaveMode === 'reload') {
             window.location.reload();
             return;
         }
 
-        realtime.stop();
-        resetPlayerSession(roomCode);
         navigate('/room/join', { replace: true });
     };
 
@@ -216,6 +260,15 @@ export default function PlayerPage({ initialRoomCode }) {
         window.history.pushState({ player_guard: true }, '', window.location.href);
 
         const onBeforeUnload = (event) => {
+            if (playerToken && roomCode) {
+                const payload = JSON.stringify({
+                    player_token: playerToken,
+                });
+                const blob = new Blob([payload], { type: 'application/json' });
+
+                navigator.sendBeacon(leaveEndpoint, blob);
+            }
+
             event.preventDefault();
             event.returnValue = '';
         };
@@ -248,7 +301,7 @@ export default function PlayerPage({ initialRoomCode }) {
             window.removeEventListener('popstate', onPopState);
             window.removeEventListener('keydown', onKeyDown);
         };
-    }, [playerToken]);
+    }, [playerToken, roomCode, leaveEndpoint]);
 
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_20%_20%,#67e8f9_0,#bfdbfe_35%,#c4b5fd_100%)] text-slate-800">
@@ -258,8 +311,6 @@ export default function PlayerPage({ initialRoomCode }) {
                     <h1 className="mb-3 text-center text-3xl font-black tracking-tight text-indigo-900">{appName}</h1>
 
                     {errorMessage ? <div className="mb-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-rose-700">{errorMessage}</div> : null}
-                    {infoMessage ? <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-emerald-700">{infoMessage}</div> : null}
-
                     {!playerToken ? (
                         <form className="space-y-4 rounded-[2rem] border border-white/40 bg-white/80 p-5 shadow-[0_28px_90px_-38px_rgba(67,56,202,0.55)] backdrop-blur-sm" onSubmit={onPlay}>
                             <div className="flex items-center justify-between">

@@ -9,15 +9,18 @@ use App\Http\Requests\HostFinishQuizRequest;
 use App\Http\Requests\HostLoginRequest;
 use App\Http\Requests\HostNextQuestionRequest;
 use App\Http\Requests\JoinRoomRequest;
+use App\Http\Requests\LeaveRoomRequest;
 use App\Jobs\CloseRoomQuestionJob;
 use App\Models\Quiz;
 use App\Models\QuizQuestion;
 use App\Models\QuizRoom;
+use App\Models\RoomAnswer;
 use App\Models\RoomPlayer;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -250,15 +253,21 @@ class QuizRoomController extends Controller
         $requestedDisplayName = trim($request->string('display_name')->value());
 
         if ($requestedDisplayName !== '') {
-            $isDuplicatedName = RoomPlayer::query()
+            $existingPlayerWithSameName = RoomPlayer::query()
                 ->where('quiz_room_id', $room->id)
+                ->where('is_host', false)
                 ->whereRaw('LOWER(display_name) = ?', [mb_strtolower($requestedDisplayName)])
-                ->exists();
+                ->first();
 
-            if ($isDuplicatedName) {
-                return response()->json([
-                    'message' => 'Tên người chơi đã tồn tại trong phòng. Vui lòng chọn tên khác.',
-                ], 409);
+            if ($existingPlayerWithSameName !== null) {
+                DB::transaction(function () use ($room, $existingPlayerWithSameName): void {
+                    RoomAnswer::query()
+                        ->where('quiz_room_id', $room->id)
+                        ->where('room_player_id', $existingPlayerWithSameName->id)
+                        ->delete();
+
+                    $existingPlayerWithSameName->delete();
+                });
             }
         }
 
@@ -347,6 +356,52 @@ class QuizRoomController extends Controller
         return response()->json([
             'room_code' => $room->room_code,
             'players' => $players,
+        ]);
+    }
+
+    public function leave(LeaveRoomRequest $request, string $roomCode): JsonResponse
+    {
+        $room = QuizRoom::query()->where('room_code', $roomCode)->first();
+
+        if ($room === null) {
+            return response()->json([
+                'message' => 'Room not found.',
+            ], 404);
+        }
+
+        $player = RoomPlayer::query()
+            ->where('quiz_room_id', $room->id)
+            ->where('player_token', $request->string('player_token')->value())
+            ->first();
+
+        if ($player === null) {
+            return response()->json([
+                'message' => 'Invalid player token.',
+            ], 403);
+        }
+
+        $leftPlayerPayload = [
+            'id' => $player->id,
+            'display_name' => $player->display_name,
+            'gender' => $player->gender,
+            'is_host' => (bool) $player->is_host,
+        ];
+
+        DB::transaction(function () use ($room, $player): void {
+            RoomAnswer::query()
+                ->where('quiz_room_id', $room->id)
+                ->where('room_player_id', $player->id)
+                ->delete();
+
+            $player->delete();
+        });
+
+        event(new QuizRoomUpdated($room->room_code, 'player_left', [
+            'player' => $leftPlayerPayload,
+        ]));
+
+        return response()->json([
+            'message' => 'Left room successfully.',
         ]);
     }
 
